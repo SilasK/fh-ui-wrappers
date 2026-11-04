@@ -172,10 +172,13 @@ DOM, the browser console and the recent server log into
 `debug/issues/<timestamp>-<slug>/`.
 
 ```python
-from fh_ui_wrappers import DEBUG_OVERLAY_STYLE, debug_overlay_script
+from fh_ui_wrappers import debug_overlay_script
 
-hdrs = (..., DEBUG_OVERLAY_STYLE, debug_overlay_script())
+hdrs = (..., debug_overlay_script())
 ```
+
+The script injects its own styles, so one `Script` is enough; `DEBUG_OVERLAY_STYLE`
+is still exported for apps that ship the CSS separately.
 
 Register the two endpoints (see `examples/debug_routes.py`):
 

@@ -82,6 +82,8 @@ def test_debug_overlay_urls_are_configurable():
     assert "/c" in markup and "/i" in markup
     assert "__CONFIG_URL__" not in markup
     assert "__ISSUE_URL__" not in markup
+    assert "__OVERLAY_CSS__" not in markup
+    assert "debug-overlay-tab" in markup
 
 
 def test_session_reporter_extracts_identity():

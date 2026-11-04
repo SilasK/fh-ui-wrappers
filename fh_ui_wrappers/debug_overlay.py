@@ -195,8 +195,7 @@ def create_issue_bundle(
     return {"id": folder.name, "path": str(folder)}
 
 
-DEBUG_OVERLAY_STYLE = Style(
-    """
+_DEBUG_OVERLAY_CSS = """
 #debug-overlay-tab{position:fixed;top:50%;right:0;transform:translateY(-50%);
   z-index:99998;background:#1f2937;color:#fff;border:0;border-radius:6px 0 0 6px;
   padding:10px 5px;cursor:pointer;writing-mode:vertical-rl;font-size:12px;
@@ -225,7 +224,9 @@ DEBUG_OVERLAY_STYLE = Style(
 #debug-overlay-status{color:#475569;min-height:16px;word-break:break-word}
 #debug-overlay-panel .dbo-note{color:#64748b;font-size:11px}
 """
-)
+
+
+DEBUG_OVERLAY_STYLE = Style(_DEBUG_OVERLAY_CSS, id="debug-overlay-style")
 
 
 _DEBUG_OVERLAY_JS = r"""
@@ -303,15 +304,27 @@ _DEBUG_OVERLAY_JS = r"""
       .catch(function(err){ restore(); D.logs.push('[debug-overlay] screenshot failed: ' + err); return null; });
   }
 
+  function injectStyles(){
+    if (document.getElementById('debug-overlay-style')) return;
+    var style = document.createElement('style');
+    style.id = 'debug-overlay-style';
+    style.textContent = __OVERLAY_CSS__;
+    document.head.appendChild(style);
+  }
+
   function build(){
+    injectStyles();
     var tab = document.createElement('button');
     tab.id = 'debug-overlay-tab';
     tab.type = 'button';
     tab.textContent = 'BUG';
     tab.title = 'Signaler un problème';
+    tab.setAttribute('aria-label', 'Signaler un problème');
 
     var panel = document.createElement('div');
     panel.id = 'debug-overlay-panel';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-label', 'Signaler un problème');
     panel.innerHTML =
       '<div class="dbo-head"><strong>Signaler un problème</strong>' +
       '<button type="button" class="dbo-close" aria-label="Fermer">&times;</button></div>' +
@@ -334,6 +347,9 @@ _DEBUG_OVERLAY_JS = r"""
 
     tab.addEventListener('click', function(){ panel.classList.toggle('open'); });
     closeBtn.addEventListener('click', function(){ panel.classList.remove('open'); });
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape') panel.classList.remove('open');
+    });
 
     sendBtn.addEventListener('click', function(){
       var issue = (textarea.value || '').trim();
@@ -388,10 +404,18 @@ def debug_overlay_script(
     config_url: str = "/debug/overlay/config",
     issue_url: str = "/debug/issue",
 ):
-    """Return the client ``Script`` with configurable endpoint URLs."""
-    js = _DEBUG_OVERLAY_JS.replace(
-        "__CONFIG_URL__", json.dumps(config_url)
-    ).replace("__ISSUE_URL__", json.dumps(issue_url))
+    """Return the client ``Script`` with configurable endpoint URLs.
+
+    The script injects its own styles, so a single ``Script`` in the page
+    headers is enough. :data:`DEBUG_OVERLAY_STYLE` remains available for apps
+    that prefer to ship the CSS separately; the script skips injecting when that
+    element is already present.
+    """
+    js = (
+        _DEBUG_OVERLAY_JS.replace("__OVERLAY_CSS__", json.dumps(_DEBUG_OVERLAY_CSS))
+        .replace("__CONFIG_URL__", json.dumps(config_url))
+        .replace("__ISSUE_URL__", json.dumps(issue_url))
+    )
     return Script(js)
 
 
