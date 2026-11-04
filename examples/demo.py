@@ -122,25 +122,33 @@ def get():
                     "Dropdowns",
                     Form(
                         Div(
-                            Label("MonsterUI (bridge uk-select)", cls="mb-1 block text-sm font-medium"),
                             Dropdown(
                                 GROUPS,
                                 name="group",
+                                label="MonsterUI — LabelSelect (bridge uk-select)",
                                 placeholder="Choisir un groupe…",
                             ),
                             cls="mb-4",
                         ),
                         Div(
-                            Label("Natif (soumission fiable)", cls="mb-1 block text-sm font-medium"),
                             Dropdown(
                                 GROUPS,
                                 name="group_native",
+                                label="Natif — soumission fiable",
                                 placeholder="Choisir un groupe…",
                                 native=True,
                                 cls="uk-select w-64",
                             ),
                         ),
-                        cls="max-w-xl",
+                        Dropdown(
+                            GROUPS,
+                            name="group_multi",
+                            label="Multi-sélection (natif)",
+                            value=["clarens"],
+                            multiple=True,
+                            cls="uk-select w-64",
+                        ),
+                        cls="max-w-xl space-y-4",
                     ),
                 ),
                 section(

@@ -40,6 +40,30 @@ def test_icon_button_is_accessible():
     assert 'title="Supprimer"' in markup
 
 
+def test_dropdown_with_label_uses_labelselect():
+    markup = html(Dropdown({"a": "Groupe A"}, name="group", label="Groupe", value="a"))
+    assert "uk-form-label" in markup
+    assert 'for="group"' in markup
+    assert 'name="group"' in markup
+    # FormLabel is the form label, not the pill-shaped uk-label.
+    assert "uk-label" not in markup
+
+
+def test_native_labeled_dropdown_links_label():
+    markup = html(
+        Dropdown([("a", "A")], name="group", label="Groupe", native=True)
+    )
+    assert '<label for="group"' in markup
+    assert "<select" in markup
+
+
+def test_multiple_forces_native_select():
+    markup = html(Dropdown(["a", "b"], name="groups", multiple=True, value=["a"]))
+    assert "<select" in markup
+    assert "multiple" in markup
+    assert "<uk-select" not in markup
+
+
 def test_dropdown_selects_value_and_translates_hx_trigger():
     markup = html(
         Dropdown(

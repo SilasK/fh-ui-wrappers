@@ -99,13 +99,24 @@ stay accessible.
 objects:
 
 ```python
-Dropdown({"a": "Groupe A", "b": "Groupe B"}, name="group", value="a")
+# Labelled: returns MonsterUI's LabelSelect (FormLabel + Select)
+Dropdown({"a": "Groupe A", "b": "Groupe B"}, name="group", label="Groupe",
+         value="a")
 
-Dropdown(groups, name="group_id", value_attr="group_id", label_attr="name",
-         placeholder="Choisir un groupe…")
+Dropdown(groups, name="group_id", label="Groupe", value_attr="group_id",
+         label_attr="name", placeholder="Choisir un groupe…")
 
-Dropdown(options, name="date", native=True, cls="uk-select w-44")
+# Bare select, no label
+Dropdown(options, name="filter")
+
+# Plain native <select> (reliable form submission)
+Dropdown(options, name="date", label="Date", native=True, cls="uk-select w-44")
 ```
+
+When `label` is given the wrapper uses MonsterUI's **`LabelSelect`**, which
+pairs a `FormLabel` (`uk-form-label`, not the pill-shaped `uk-label`) with the
+styled select and links them via `for`/`id` (the id defaults to `name`).
+Without `label` you get the bare `Select`, so you can place your own label.
 
 Two MonsterUI gotchas are handled for you:
 
@@ -115,7 +126,9 @@ Two MonsterUI gotchas are handled for you:
    wrapper translates it.
 2. **Sometimes a native `<select>` is safer.** MonsterUI's `Select` renders a
    JS custom element that carries `name` on the wrapper; use `native=True` for
-   forms where the selected value must be submitted reliably.
+   forms where the selected value must be submitted reliably. `multiple=True`
+   always uses the native element because the bridge does not forward
+   `multiple` to the inner control.
 
 ## Checkboxes
 
