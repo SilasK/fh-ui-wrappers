@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pixi/
+.pytest_cache/
+.ruff_cache/
+debug/issues/
+*.db
