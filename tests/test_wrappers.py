@@ -19,6 +19,7 @@ from fh_ui_wrappers.debug_overlay import (
     MAX_ISSUE_CHARS,
     create_issue_bundle,
     debug_overlay_headers,
+    recent_log_tail,
     session_reporter,
 )
 
@@ -132,6 +133,27 @@ def test_issue_bundle_records_reporter_and_caps_description(tmp_path):
     body = issue_md.split("Problème:", 1)[1].strip()
     assert len(body) == MAX_ISSUE_CHARS
     assert set(body) == {"x"}
+
+
+def test_recent_log_tail_drops_stale_entries_and_their_tracebacks(tmp_path):
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+    old = (now - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
+    recent = (now - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
+    log = tmp_path / "app.log"
+    log.write_text(
+        f"{old} - old entry\nstale traceback\n"
+        f"{recent},123 - recent entry\nfresh traceback\n",
+        encoding="utf-8",
+    )
+
+    tail = recent_log_tail(log, minutes=15)
+
+    assert "recent entry" in tail
+    assert "fresh traceback" in tail
+    assert "stale traceback" not in tail
+    assert "old entry" not in tail
 
 
 def test_issue_bundle_admin_label_is_backwards_compatible(tmp_path):

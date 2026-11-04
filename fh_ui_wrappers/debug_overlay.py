@@ -91,36 +91,49 @@ def _parse_log_timestamp(line: str):
     return None
 
 
-def _recent_log_tail(log_path: Path, minutes: int) -> str:
-    """Return lines from the last ``minutes`` minutes of one log file.
+def recent_log_tail(
+    log_path: str | os.PathLike,
+    minutes: int = 15,
+    max_bytes: int = 4_000_000,
+) -> str:
+    """Return the last ``minutes`` minutes of one log file.
 
     Lines without their own timestamp (tracebacks, continuation lines) are kept
     when the timestamped line they follow was kept, so multi-line errors stay
-    readable.
+    readable without dragging in stale tracebacks.
+
+    Only the final ``max_bytes`` of the file are read, so a large or rotated log
+    is not loaded whole on every submission.
     """
     path = Path(log_path)
-    if not path.exists():
+    if not path.is_file():
         return ""
+    try:
+        with path.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            handle.seek(max(0, size - max_bytes))
+            raw = handle.read()
+    except OSError:
+        return ""
+
     cutoff = datetime.now() - timedelta(minutes=minutes)
     kept: list[str] = []
     keep_current = False
-    try:
-        with path.open("r", encoding="utf-8", errors="replace") as handle:
-            for raw in handle:
-                line = raw.rstrip("\n")
-                ts = _parse_log_timestamp(line)
-                if ts is not None:
-                    keep_current = ts >= cutoff
-                if keep_current:
-                    kept.append(line)
-    except OSError:
-        return ""
+    for line in raw.decode("utf-8", "replace").splitlines():
+        ts = _parse_log_timestamp(line)
+        if ts is not None:
+            keep_current = ts >= cutoff
+        if keep_current:
+            kept.append(line)
     return "\n".join(kept)
 
 
-def recent_server_log(log_dir: str | os.PathLike, minutes: int = 15) -> str:
+def recent_server_log(
+    log_dir: str | os.PathLike, minutes: int = 15, max_bytes: int = 4_000_000
+) -> str:
     """Return ``app.log`` lines from the last ``minutes`` minutes."""
-    return _recent_log_tail(Path(log_dir) / "app.log", minutes)
+    return recent_log_tail(Path(log_dir) / "app.log", minutes, max_bytes)
 
 
 def _slugify(text: str, max_len: int = 40) -> str:
@@ -439,6 +452,7 @@ __all__ = [
     "debug_overlay_headers",
     "debug_overlay_public",
     "debug_overlay_script",
+    "recent_log_tail",
     "recent_server_log",
     "session_reporter",
 ]

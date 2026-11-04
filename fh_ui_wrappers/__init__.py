@@ -23,6 +23,7 @@ from .debug_overlay import (
     debug_overlay_headers,
     debug_overlay_public,
     debug_overlay_script,
+    recent_log_tail,
     recent_server_log,
     session_reporter,
 )
@@ -61,6 +62,7 @@ __all__ = [
     "debug_overlay_script",
     "photo_overlay_script",
     "photo_thumb",
+    "recent_log_tail",
     "recent_server_log",
     "session_reporter",
 ]
