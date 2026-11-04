@@ -29,6 +29,36 @@ from fasthtml.common import Script, Style
 
 _LOG_TS_FORMATS = ("%Y-%m-%d %H:%M:%S,%f", "%Y-%m-%d %H:%M:%S")
 
+#: Session keys worth attaching to a report so triage knows who hit the bug.
+#: Readers usually have no account, so their event/session slug is the identity.
+REPORTER_KEYS = (
+    "role",
+    "user_id",
+    "email",
+    "org_slug",
+    "session_slug",
+    "session_id",
+    "reader_id",
+)
+
+#: Bounds for publicly reachable submissions.
+MAX_ISSUE_CHARS = 10_000
+MAX_DOM_BYTES = 5 * 1024 * 1024
+MAX_CONSOLE_BYTES = 2 * 1024 * 1024
+MAX_SCREENSHOT_BYTES = 25 * 1024 * 1024
+
+
+def session_reporter(session) -> dict:
+    """Return the non-empty identity fields of the reporting session.
+
+    Works with a Starlette session dict. Pass the result to
+    :func:`create_issue_bundle` as ``reporter``. Anonymous sessions yield ``{}``.
+    """
+    if not session:
+        return {}
+    return {key: session.get(key) for key in REPORTER_KEYS if session.get(key)}
+
+
 
 def debug_overlay_enabled() -> bool:
     """Global kill switch (default on). ``DEBUG_OVERLAY=0`` disables it."""
@@ -107,19 +137,25 @@ def create_issue_bundle(
     url: str,
     dom: str,
     console_log: str,
-    admin: str,
     user_agent: str,
     log_dir: str | os.PathLike,
     screenshot: bytes | None = None,
     base_dir: Path | None = None,
     layout_only: bool = False,
     screen_size: dict | None = None,
+    reporter: dict | str | None = None,
+    admin: str = "",
 ) -> dict:
     """Write one issue bundle and return ``{"id", "path"}``.
 
     The description becomes ``issue.md`` with YAML front matter holding the
     machine-readable metadata. ``layout_only`` reduces the bundle to
     ``issue.md`` + ``dom.html`` + ``screenshot.png``.
+
+    ``reporter`` is the identity of the reporting session, usually
+    :func:`session_reporter`; ``admin`` is the older free-form label and is kept
+    for backwards compatibility. Payloads are bounded so a publicly reachable
+    endpoint cannot be used to fill the disk.
     """
     base = Path(base_dir) if base_dir else Path("debug/issues")
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -130,25 +166,30 @@ def create_issue_bundle(
         suffix += 1
     folder.mkdir(parents=True, exist_ok=True)
 
+    reporter_meta = reporter or ({"admin": admin} if admin else {})
     meta = {
         "layout_only": bool(layout_only),
         "url": url,
         "screen": screen_size or {},
         "date": datetime.now().isoformat(timespec="seconds"),
-        "admin": admin or "unknown",
+        "reporter": reporter_meta,
         "user_agent": user_agent,
     }
     front_matter = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip()
     (folder / "issue.md").write_text(
-        f"---\n{front_matter}\n---\n\nProblème:\n{issue}\n",
+        f"---\n{front_matter}\n---\n\nProblème:\n{issue[:MAX_ISSUE_CHARS]}\n",
         encoding="utf-8",
     )
-    (folder / "dom.html").write_text(dom or "", encoding="utf-8")
-    if screenshot:
+    (folder / "dom.html").write_bytes(
+        (dom or "").encode("utf-8", "replace")[:MAX_DOM_BYTES]
+    )
+    if screenshot and len(screenshot) <= MAX_SCREENSHOT_BYTES:
         (folder / "screenshot.png").write_bytes(screenshot)
 
     if not layout_only:
-        (folder / "console.log").write_text(console_log or "", encoding="utf-8")
+        (folder / "console.log").write_bytes(
+            (console_log or "").encode("utf-8", "replace")[:MAX_CONSOLE_BYTES]
+        )
         (folder / "server.log").write_text(recent_server_log(log_dir), encoding="utf-8")
 
     return {"id": folder.name, "path": str(folder)}
@@ -231,8 +272,28 @@ _DEBUG_OVERLAY_JS = r"""
     var chain = window.html2canvas
       ? Promise.resolve()
       : loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
+    // html2canvas 1.4.1 cannot parse oklch/color()/color-mix(): retry once with
+    // a neutral palette in the cloned document so the report still gets a
+    // layout screenshot instead of none.
+    var safeStyles = '*,*::before,*::after{color:#111!important;' +
+      'background-color:#fff!important;background-image:none!important;' +
+      'border-color:#ccc!important;box-shadow:none!important;' +
+      'text-shadow:none!important;}';
+    var addSafePalette = function(doc){
+      var style = doc.createElement('style');
+      style.textContent = safeStyles;
+      doc.head.appendChild(style);
+    };
+    var capture = function(onclone){
+      return window.html2canvas(document.body, {useCORS:true, logging:false, onclone:onclone});
+    };
     return chain
-      .then(function(){ return window.html2canvas(document.body, {useCORS:true, logging:false}); })
+      .then(function(){
+        return capture().catch(function(){
+          D.logs.push('[debug-overlay] screenshot retry with capture-safe palette');
+          return capture(addSafePalette);
+        });
+      })
       .then(function(canvas){
         return new Promise(function(resolve){
           canvas.toBlob(function(blob){ resolve(blob); }, 'image/png');
@@ -344,10 +405,16 @@ def debug_overlay_headers(
 
 __all__ = [
     "DEBUG_OVERLAY_STYLE",
+    "MAX_CONSOLE_BYTES",
+    "MAX_DOM_BYTES",
+    "MAX_ISSUE_CHARS",
+    "MAX_SCREENSHOT_BYTES",
+    "REPORTER_KEYS",
     "create_issue_bundle",
     "debug_overlay_enabled",
     "debug_overlay_headers",
     "debug_overlay_public",
     "debug_overlay_script",
     "recent_server_log",
+    "session_reporter",
 ]

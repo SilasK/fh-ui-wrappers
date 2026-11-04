@@ -24,6 +24,7 @@ from .debug_overlay import (
     debug_overlay_public,
     debug_overlay_script,
     recent_server_log,
+    session_reporter,
 )
 from .forms import Checkbox, CheckboxRow, Dropdown, Label
 from .overlays import (
@@ -61,4 +62,5 @@ __all__ = [
     "photo_overlay_script",
     "photo_thumb",
     "recent_server_log",
+    "session_reporter",
 ]

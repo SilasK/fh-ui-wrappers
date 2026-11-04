@@ -7,7 +7,8 @@ Wire them into your app after creating ``app, rt = fast_app(...)``::
 
 Pass ``is_admin`` (a callable taking the session and returning truthy for an
 admin) to restrict submissions. Without it every visitor can submit, which is
-only appropriate for a dev deployment.
+only appropriate for a dev deployment. ``DEBUG_OVERLAY=all`` opens it to every
+visitor even when ``is_admin`` is set.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from fh_ui_wrappers.debug_overlay import (
     create_issue_bundle,
     debug_overlay_enabled,
     debug_overlay_public,
+    session_reporter,
 )
 
 
@@ -34,16 +36,20 @@ def register_debug_overlay(
 ):
     """Register ``/debug/overlay/config`` and ``/debug/issue``."""
 
+    def _allowed(session) -> bool:
+        if not debug_overlay_enabled():
+            return False
+        if debug_overlay_public():
+            return True
+        return bool(is_admin(session)) if is_admin else True
+
     @rt("/debug/overlay/config", methods=["GET"])
     def debug_overlay_config(session):
-        enabled = debug_overlay_enabled() and (
-            debug_overlay_public() or (is_admin(session) if is_admin else True)
-        )
-        return JSONResponse({"enabled": bool(enabled)})
+        return JSONResponse({"enabled": _allowed(session)})
 
     @rt("/debug/issue", methods=["POST"])
     async def debug_issue_post(request, session):
-        if is_admin and not is_admin(session):
+        if not _allowed(session):
             return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=403)
 
         form = await request.form()
@@ -66,7 +72,6 @@ def register_debug_overlay(
                 url=str(form.get("url", "")),
                 dom=str(form.get("dom", "")),
                 console_log=str(form.get("console_log", "")),
-                admin="admin" if is_admin else "dev-public",
                 user_agent=request.headers.get("user-agent", ""),
                 log_dir=log_dir,
                 base_dir=Path(base_dir),
@@ -74,6 +79,7 @@ def register_debug_overlay(
                 layout_only=str(form.get("layout_only", "")).strip().lower()
                 in ("1", "true", "on", "yes"),
                 screen_size=screen_size,
+                reporter=session_reporter(session),
             )
         except Exception as exc:  # never break the reporter itself
             logging.exception("debug issue bundle failed")

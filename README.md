@@ -188,6 +188,17 @@ register_debug_overlay(rt, base_dir=Path("debug/issues"), log_dir=Path("logs"),
 `DEBUG_OVERLAY=0` disables the tab; `DEBUG_OVERLAY=all` offers it to every
 visitor (dev only). Without `is_admin` every visitor can submit.
 
+The bundle records who reported it: pass the session through
+`session_reporter` and every `issue.md` front matter gets a `reporter` block
+with `role` plus the account (`user_id`, `email`, `org_slug`) or, for readers,
+the event (`session_slug`, `session_id`, `reader_id`). The example routes wire
+this up; anonymous sessions store an empty block.
+
+Submissions are publicly reachable on a dev deployment, so the bundle writer
+bounds them: 10k characters of description, 5 MB DOM, 2 MB console log and
+25 MB screenshot. The client retries a failed screenshot with a neutral palette
+because html2canvas 1.4.1 crashes on `oklch()` / `color-mix()` design tokens.
+
 ## Design notes
 
 - **Plain labels.** MonsterUI's `Label` renders a `uk-label` badge. `Label` here

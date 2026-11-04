@@ -1,5 +1,7 @@
 """Smoke tests: every wrapper renders, and the tricky bits stay fixed."""
 
+from pathlib import Path
+
 from fasthtml.common import to_xml
 
 from fh_ui_wrappers import (
@@ -13,7 +15,12 @@ from fh_ui_wrappers import (
     ModalTrigger,
     photo_thumb,
 )
-from fh_ui_wrappers.debug_overlay import debug_overlay_headers
+from fh_ui_wrappers.debug_overlay import (
+    MAX_ISSUE_CHARS,
+    create_issue_bundle,
+    debug_overlay_headers,
+    session_reporter,
+)
 
 
 def html(component):
@@ -75,6 +82,74 @@ def test_debug_overlay_urls_are_configurable():
     assert "/c" in markup and "/i" in markup
     assert "__CONFIG_URL__" not in markup
     assert "__ISSUE_URL__" not in markup
+
+
+def test_session_reporter_extracts_identity():
+    assert session_reporter(
+        {
+            "role": "admin",
+            "user_id": "42",
+            "email": "admin@example.com",
+            "org_slug": "acme",
+            "locale": "fr",
+        }
+    ) == {
+        "role": "admin",
+        "user_id": "42",
+        "email": "admin@example.com",
+        "org_slug": "acme",
+    }
+    assert session_reporter({"role": "reader", "session_slug": "s1", "session_id": "x"}) == {
+        "role": "reader",
+        "session_slug": "s1",
+        "session_id": "x",
+    }
+    assert session_reporter({}) == {}
+    assert session_reporter(None) == {}
+
+
+def test_issue_bundle_records_reporter_and_caps_description(tmp_path):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    (log_dir / "app.log").write_text("", encoding="utf-8")
+
+    result = create_issue_bundle(
+        issue="x" * (MAX_ISSUE_CHARS + 500),
+        url="https://example.com/",
+        dom="<html></html>",
+        console_log="",
+        user_agent="pytest",
+        log_dir=log_dir,
+        base_dir=tmp_path / "issues",
+        reporter={"role": "admin", "email": "admin@example.com"},
+    )
+
+    issue_md = (Path(result["path"]) / "issue.md").read_text(encoding="utf-8")
+    assert "reporter:" in issue_md
+    assert "admin@example.com" in issue_md
+    body = issue_md.split("Problème:", 1)[1].strip()
+    assert len(body) == MAX_ISSUE_CHARS
+    assert set(body) == {"x"}
+
+
+def test_issue_bundle_admin_label_is_backwards_compatible(tmp_path):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+
+    result = create_issue_bundle(
+        issue="bug",
+        url="https://example.com/",
+        dom="",
+        console_log="",
+        user_agent="pytest",
+        log_dir=log_dir,
+        base_dir=tmp_path / "issues",
+        admin="dev",
+    )
+
+    issue_md = (Path(result["path"]) / "issue.md").read_text(encoding="utf-8")
+    assert "admin: dev" in issue_md
+
 
 
 def test_checkbox_hidden_field():
